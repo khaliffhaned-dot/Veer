@@ -81,7 +81,11 @@ export async function insertArticle(
   }
 
   const snippet = a.snippet ? stripHtml(a.snippet).slice(0, SNIPPET_MAX) : null;
-  const det = a.language ? { lang: a.language, confidence: 1 } : detectLanguage(`${title}. ${snippet ?? ''}`, a.languageHint);
+  // The headline is the strongest signal. The snippet is consulted only if the headline alone is inconclusive,
+  // so a boilerplate or bilingual snippet cannot override a clearly Malay/English/Chinese headline.
+  let det = a.language ? { lang: a.language, confidence: 1 } : detectLanguage(title);
+  if (!a.language && det.confidence < 0.5 && snippet) det = detectLanguage(`${title}. ${snippet}`);
+  if (!a.language && (det.lang === 'unknown' || det.confidence < 0.4)) det = detectLanguage(`${title}. ${snippet ?? ''}`, a.languageHint);
   const publishedAt = validDate(a.publishedAt, fetchedAt);
   const id = uid();
   const groupId = findGroup(title, canonical, candidates) ?? id;

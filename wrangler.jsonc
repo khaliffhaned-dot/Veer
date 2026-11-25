@@ -1,0 +1,27 @@
+{
+  // Veer: Malaysian media intelligence on Cloudflare Workers + D1.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "veer",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2025-01-15",
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    // API requests always hit the Worker; everything else is static SPA.
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "veer",
+      // Replace with the id from `wrangler d1 create veer` before deploying.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Feed capture + alert evaluation every 15 minutes.
+  "triggers": { "crons": ["*/15 * * * *"] },
+  "vars": { "ALLOW_SIGNUP": "false" },
+  "observability": { "enabled": true }
+}
