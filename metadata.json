@@ -1,0 +1,11 @@
+{
+  "name": "PRVAIL: Enterprise Communications Intelligence",
+  "description": "An enterprise-grade social listening and media monitoring platform designed to transform market noise into actionable intelligence. It features advanced analytics, cultural nuance detection, and real-time sentiment tracking to help organizations manage their brand narrative and strategic communications.",
+  "requestFramePermissions": [
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,192 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;550;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-brand-light: #f0fdf4;
+  --color-brand: #10b981;
+  --color-brand-dark: #059669;
+  --font-sans: 'Inter', sans-serif;
+  --font-display: 'Outfit', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* Custom styles for libraries & components */
+:root {
+    --font-family: 'Inter', sans-serif;
+    --brand-primary: #0f172a;
+    --brand-primary-light: #f8fafc;
+}
+
+body {
+    font-family: var(--font-family);
+    background-color: #f8fafc;
+    color: #0f172a;
+}
+
+.leaflet-popup-content-wrapper {
+    border-radius: 8px;
+}
+
+.apexcharts-tooltip {
+    @apply bg-white border border-gray-200 rounded-lg shadow-lg text-sm;
+}
+
+.apexcharts-tooltip-title {
+    @apply bg-slate-100 border-b border-gray-200 px-3 py-2 font-semibold;
+}
+
+.apexcharts-tooltip-series-group {
+    @apply px-3 py-2;
+}
+
+.apexcharts-legend-text {
+    @apply !text-slate-600 font-medium;
+}
+
+/* NAVIGATION */
+.nav-item {
+    @apply flex items-center p-2.5 rounded-lg font-medium text-slate-600 transition-colors relative;
+}
+
+.nav-item:hover,
+.single-item:hover {
+    @apply bg-slate-100 text-slate-900;
+}
+
+.nav-item.active,
+.single-item.active {
+    @apply bg-brand-light text-brand font-semibold;
+}
+
+.nav-item svg:first-child {
+    @apply mr-3 shrink-0;
+}
+
+.nav-item__text {
+    @apply flex-grow;
+}
+
+.nav-item__arrow {
+    @apply transition-transform w-4 h-4;
+}
+
+.nav-item__arrow--open {
+    @apply rotate-90;
+}
+
+.sub-nav-list {
+    @apply list-none p-0 m-0 max-h-0 overflow-hidden transition-all duration-300 ease-in-out;
+}
+
+.sub-nav-list.open {
+    @apply max-h-[500px];
+}
+
+.sub-nav-item {
+    @apply block py-2 pr-3 pl-12 text-sm rounded-lg text-slate-600 relative whitespace-nowrap overflow-hidden text-ellipsis;
+}
+
+.sub-nav-item:hover {
+    @apply bg-slate-100 text-slate-900;
+}
+
+.sub-nav-item.active {
+    @apply text-brand font-semibold;
+}
+
+
+/* CHAT */
+.chat-bubble-user {
+    background-color: #1e293b;
+    /* slate-800 */
+    color: white;
+    padding: 0.75rem;
+    /* p-3 */
+    border-radius: 0.5rem;
+    /* rounded-lg */
+    border-bottom-right-radius: 0;
+    /* rounded-br-none */
+    max-width: 80%;
+    margin-left: auto;
+}
+
+.chat-bubble-ai {
+    background-color: #f1f5f9;
+    /* slate-100 */
+    color: #1e293b;
+    /* slate-800 */
+    padding: 0.75rem;
+    /* p-3 */
+    border-radius: 0.5rem;
+    /* rounded-lg */
+    border-bottom-left-radius: 0;
+    /* rounded-bl-none */
+    max-width: 80%;
+    margin-right: auto;
+}
+
+/* KANBAN */
+.kanban-board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+.kanban-column {
+    background-color: #f1f5f9;
+    /* slate-100 */
+    border-radius: 0.75rem;
+    /* rounded-xl */
+    display: flex;
+    flex-direction: column;
+}
+
+.kanban-column-header {
+    padding: 1rem;
+    border-bottom: 1px solid #e2e8f0;
+    /* slate-200 */
+}
+
+.kanban-column-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1e293b;
+    /* slate-800 */
+}
+
+.kanban-cards {
+    padding: 0.75rem;
+    min-height: 200px;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    transition: background-color 0.2s;
+}
+
+.kanban-card {
+    background-color: white;
+    border: 1px solid #e2e8f0;
+    /* slate-200 */
+    border-radius: 0.5rem;
+    /* rounded-lg */
+    padding: 1rem;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    cursor: grab;
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.kanban-card:hover {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    transform: translateY(-2px);
+}
+
+.kanban-card.is-dragging {
+    opacity: 0.5;
+}
+
+.kanban-column.drag-over {
+    background-color: #e0f2fe;
+    /* sky-100 */
+}
