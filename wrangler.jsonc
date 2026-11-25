@@ -1,0 +1,37 @@
+{
+  // Veer: Malaysian media intelligence on Cloudflare Workers + D1.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "veer",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2025-01-15",
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    // API requests always hit the Worker; everything else is static SPA.
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "veer",
+      // Created via the Cloudflare connector (APAC).
+      "database_id": "4a8291ae-19c8-4baf-8631-9074754b9295",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Feed capture + alert evaluation every 15 minutes.
+  "triggers": { "crons": ["*/15 * * * *"] },
+  // Realtime: one Durable Object per workspace (SQLite-backed class; works on the free plan).
+  "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "WorkspaceHub" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["WorkspaceHub"] }],
+  // Workers AI. Model ids are overridable below; check the catalogue and your plan's availability.
+  "ai": { "binding": "AI" },
+  "vars": {
+    "ALLOW_SIGNUP": "false",
+    "AI_TEXT_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "AI_EMBED_MODEL": "@cf/baai/bge-m3",
+    "AI_MERGE_THRESHOLD": "0.82"
+  },
+  "observability": { "enabled": true }
+}

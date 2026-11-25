@@ -1,34 +1,40 @@
 {
-  "name": "prvail",
+  "name": "veer",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.1.0",
   "type": "module",
+  "description": "Malaysian media intelligence and workflow platform on Cloudflare (Workers + D1).",
   "scripts": {
-    "dev": "vite",
+    "dev": "npm run build:web && wrangler dev --config wrangler.local.jsonc",
+    "dev:web": "vite",
+    "build:web": "vite build",
     "build": "vite build",
-    "preview": "vite preview"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "db:migrate:local": "node scripts/local-config.mjs && wrangler d1 migrations apply veer --local --config wrangler.local.jsonc",
+    "db:migrate:remote": "wrangler d1 migrations apply veer --remote",
+    "smoke": "node scripts/smoke.mjs",
+    "deploy": "npm run build:web && wrangler deploy",
+    "predev": "node scripts/local-config.mjs",
+    "dev:ai": "npm run build:web && wrangler dev"
   },
   "dependencies": {
-    "@google/genai": "^2.10.0",
-    "@googlemaps/js-api-loader": "^2.1.1",
-    "apexcharts": "^5.16.0",
-    "express": "^5.2.1",
-    "firebase": "^12.18.0",
-    "jspdf": "^4.2.1",
-    "lucide-react": "^0.383.0",
+    "fast-xml-parser": "^4.5.0",
+    "hono": "^4.6.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "recharts": "^3.9.2"
+    "react-router-dom": "^6.28.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.2",
-    "@types/express": "^5.0.6",
-    "@vitejs/plugin-react": "^4.3.1",
-    "autoprefixer": "^10.5.2",
-    "esbuild": "^0.28.1",
-    "postcss": "^8.5.16",
-    "tailwindcss": "^4.3.2",
-    "tsx": "^4.23.0",
-    "vite": "^5.3.1"
+    "@cloudflare/workers-types": "^5.20261125.1",
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vite": "^5.4.0",
+    "wrangler": "^4.168.0"
   }
 }
