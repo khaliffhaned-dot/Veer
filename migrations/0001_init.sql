@@ -88,8 +88,9 @@ CREATE TABLE articles (
   snippet TEXT,                                -- short excerpt only; we link out, we do not republish
   language TEXT NOT NULL CHECK (language IN ('ms','en','zh','ta','mixed','unknown')),
   language_confidence REAL,
-  published_at TEXT,
+  published_at TEXT,                           -- as stated by the source; NULL if the source gave none
   fetched_at TEXT NOT NULL,
+  ts TEXT NOT NULL,                            -- published_at if known, else fetched_at (used for all date filtering)
   group_id TEXT NOT NULL,                      -- story group; = id of the first article in the group
   search_text TEXT NOT NULL,                   -- normalised, CJK char-spaced text fed to FTS
   sentiment TEXT CHECK (sentiment IN ('positive','neutral','negative','mixed')), -- analyst-tagged only
@@ -97,7 +98,7 @@ CREATE TABLE articles (
   sentiment_at TEXT,
   UNIQUE (workspace_id, canonical_url)
 );
-CREATE INDEX idx_articles_ws_time ON articles(workspace_id, published_at);
+CREATE INDEX idx_articles_ws_ts ON articles(workspace_id, ts);
 CREATE INDEX idx_articles_group ON articles(workspace_id, group_id);
 CREATE INDEX idx_articles_outlet ON articles(outlet_id);
 

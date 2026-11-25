@@ -48,12 +48,25 @@ const MS_WORDS = new Set(
   ('yang dan di untuk dengan ini itu akan pada dari tidak telah kepada oleh adalah dalam juga kerana ' +
     'mereka bagi sebuah atau ke sudah beliau negara kata katanya bahawa kini lebih ada saya kami kita ' +
     'semua tetapi sebagai antara hari tahun masih belum boleh perlu menurut menteri kerajaan syarikat ' +
-    'pelbagai sedang seorang ramai lagi sebelum selepas apabila supaya kerana walaupun harga rakyat').split(' '),
+    'pelbagai sedang seorang ramai lagi sebelum selepas apabila supaya kerana walaupun harga rakyat ' +
+    'catat mencatat keuntungan kerugian tertinggi terendah naik turun kenaikan penurunan polis mahkamah ' +
+    'pilihan raya parlimen perdana presiden ketua pengarah pelaburan ekonomi kewangan bank bantuan subsidi ' +
+    'minyak petrol diesel gaji pekerja pekerjaan sekolah pelajar universiti kesihatan hospital pesakit ' +
+    'banjir ribut cuaca jalan raya kemalangan mangsa suspek ditahan dituduh dakwaan siasatan laporan ' +
+    'mengumumkan mengumumkan umum nyatakan menyatakan dilaporkan berkata mahu perlu masih tahun lalu ' +
+    'depan baharu baru pelan projek dasar undang peraturan cukai kos belanjawan hutang negeri persekutuan ' +
+    'tinggi rendah besar kecil tiga empat lima enam tujuh lapan sembilan sepuluh juta bilion ribu sen').split(' '),
 );
 const EN_WORDS = new Set(
   ('the and of to in is for on that with as by at from it was are be this have has had not but they ' +
     'will would their which more said also after about been than were who its into over our new one ' +
-    'minister government company says year could can all up out').split(' '),
+    'minister government company says year could can all up out ' +
+    'posts record quarterly profit profits loss shares market stocks prices price rise rises fall falls ' +
+    'raises cuts hike plans plan court police arrested charged probe report reports announces announced ' +
+    'bank rate rates economy economic growth jobs workers school students hospital health flood floods ' +
+    'accident victims suspect election parliament prime president chief director investment fund funds ' +
+    'oil petrol diesel subsidy budget tax debt sales revenue earnings dividend sector firm firms ' +
+    'launches launch opens expands warns warn says urges seeks hits drop drops jump jumps').split(' '),
 );
 
 export interface LangResult {
@@ -61,7 +74,19 @@ export interface LangResult {
   confidence: number; // 0..1, heuristic — not a probability
 }
 
-export function detectLanguage(text: string): LangResult {
+/**
+ * @param hint  language(s) the source outlet is known to publish in. Used only when the text alone
+ *              is inconclusive, and then reported with low confidence — never overrides clear evidence.
+ */
+export function detectLanguage(text: string, hint?: Lang[]): LangResult {
+  const r = detectRaw(text);
+  if ((r.lang === 'unknown' || r.confidence < 0.4) && hint?.length === 1 && hint[0] !== 'mixed') {
+    return { lang: hint[0], confidence: 0.35 };
+  }
+  return r;
+}
+
+function detectRaw(text: string): LangResult {
   const t = text.normalize('NFKC').toLowerCase();
   const han = (t.match(HAN_G) ?? []).length;
   const tamil = (t.match(TAMIL_G) ?? []).length;
@@ -82,7 +107,7 @@ export function detectLanguage(text: string): LangResult {
     if (EN_WORDS.has(w)) en++;
   }
   const latinLang: Lang | null =
-    ms + en < 2 ? (latin > 40 ? 'en' : null) : ms > en * 1.15 ? 'ms' : en > ms * 1.15 ? 'en' : 'mixed';
+    ms + en < 1 ? null : ms > en * 1.15 ? 'ms' : en > ms * 1.15 ? 'en' : 'mixed';
 
   if (hanShare >= 0.4) return { lang: 'zh', confidence: Math.min(1, 0.6 + hanShare * 0.4) };
   if (hanShare >= 0.12) {
