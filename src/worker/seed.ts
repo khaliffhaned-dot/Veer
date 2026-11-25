@@ -115,7 +115,6 @@ export async function loadDemoData(db: D1Database, wsId: string): Promise<number
         origin: 'demo',
         url: `https://demo.invalid/${uid()}`,
         title,
-        snippet: 'Synthetic sample coverage. Not a real news item.',
         publishedAt: ts,
         languageHint: o.languages as never,
       },

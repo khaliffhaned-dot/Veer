@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
 import type { AppEnv } from '../env';
@@ -158,7 +158,7 @@ workflow.get('/tasks', async (c) => {
   return c.json({ tasks: results });
 });
 
-async function checkRefs(c: Parameters<typeof assertMember>[0] extends never ? never : any, b: z.infer<typeof taskBody>) {
+async function checkRefs(c: Context<AppEnv>, b: Partial<z.infer<typeof taskBody>>) {
   const wsId = c.get('wsId') as string;
   if (b.assignee_id) await assertMember(c.env.DB, wsId, b.assignee_id);
   if (b.campaign_id && !(await c.env.DB.prepare('SELECT 1 AS x FROM campaigns WHERE id=? AND workspace_id=?').bind(b.campaign_id, wsId).first())) throw new HTTPException(400, { message: 'Unknown campaign' });
@@ -180,7 +180,7 @@ workflow.post('/tasks', requireRole('analyst'), async (c) => {
 
 workflow.patch('/tasks/:id', requireRole('analyst'), async (c) => {
   const b = await body(c, taskBody.partial());
-  await checkRefs(c, b as never);
+  await checkRefs(c, b);
   const cur = await c.env.DB.prepare('SELECT status FROM tasks WHERE id=? AND workspace_id=?').bind(c.req.param('id'), c.get('wsId')).first<{ status: string }>();
   if (!cur) notFound();
   const map: Record<string, unknown> = { title: b.title, description: b.description, campaign_id: b.campaign_id, assignee_id: b.assignee_id, due_at: b.due_at, status: b.status };

@@ -6,6 +6,7 @@ import { searchStories } from '../src/worker/search.ts';
 import { computeCoverage } from '../src/worker/analytics.ts';
 import { evaluateAlerts } from '../src/worker/alerts.ts';
 import { audit, SYSTEM, uid } from '../src/worker/db.ts';
+import { loadDemoData } from '../src/worker/seed.ts';
 
 async function setup() {
   const db = makeDb();
@@ -151,4 +152,17 @@ test('feed runner records failures per outlet and still ingests healthy feeds', 
   const bad = await db.prepare('SELECT feed_last_error, feed_consecutive_failures FROM outlets WHERE id = ?').bind('o2').first<{ feed_last_error: string; feed_consecutive_failures: number }>();
   assert.equal(bad!.feed_last_error, 'HTTP 503');
   assert.equal(bad!.feed_consecutive_failures, 1);
+});
+
+test('demo data: every sample headline gets the right language label and wire copies group', async () => {
+  const { db, ws } = await setup();
+  await loadDemoData(db, ws);
+  const { results } = await db.prepare(`SELECT title, language FROM articles WHERE workspace_id = ?`).bind(ws).all<{ title: string; language: string }>();
+  const lang = (t: string) => results.find((r) => r.title.startsWith(t))!.language;
+  assert.equal(lang('Seri Maju mohon maaf'), 'ms');
+  assert.equal(lang('Pelanggan Seri Maju'), 'ms');
+  assert.equal(lang('Seri Maju就网络中断'), 'zh');
+  assert.equal(lang('Seri Maju apologises'), 'en');
+  const g = await searchStories(db, ws, { q: 'apologises' }, { limit: 10, offset: 0 });
+  assert.equal(g.rows[0].articles_n, 2);
 });
