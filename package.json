@@ -8,6 +8,7 @@
     "dev": "npm run build:web && wrangler dev --config wrangler.local.jsonc",
     "dev:web": "vite",
     "build:web": "vite build",
+    "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test test/*.test.ts",
     "db:migrate:local": "node scripts/local-config.mjs && wrangler d1 migrations apply veer --local --config wrangler.local.jsonc",
