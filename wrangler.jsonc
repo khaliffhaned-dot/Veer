@@ -15,8 +15,8 @@
     {
       "binding": "DB",
       "database_name": "veer",
-      // Replace with the id from `wrangler d1 create veer` before deploying.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      // Created via the Cloudflare connector (APAC).
+      "database_id": "4a8291ae-19c8-4baf-8631-9074754b9295",
       "migrations_dir": "migrations"
     }
   ],
