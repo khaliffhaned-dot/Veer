@@ -122,6 +122,86 @@ r = await call('GET', '/api/articles/export.csv?q=seri', null, { raw: true });
 const bytes = new Uint8Array(await r.arrayBuffer());
 check('CSV export has UTF-8 BOM (Excel-safe for Chinese) and header', bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf && new TextDecoder().decode(bytes.slice(3, 20)).startsWith('date_utc,outlet'));
 
+
+// ───────────── Enterprise / AI / realtime ─────────────
+const wsUrl = BASE.replace('http', 'ws') + '/api/realtime';
+const openWs = (headers) => new Promise((resolve) => {
+  const w = new WebSocket(wsUrl, { headers });
+  const msgs = [];
+  w.onmessage = (m) => msgs.push(JSON.parse(m.data));
+  w.onopen = () => resolve({ w, msgs, ok: true });
+  w.onerror = () => resolve({ ok: false });
+});
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+cookie = ownerCookie;
+const live = await openWs({ cookie, origin: BASE });
+check('realtime: authenticated same-origin socket connects', live.ok);
+await wait(300);
+check('realtime: receives hello', live.msgs.some((m) => m.type === 'hello'), JSON.stringify(live.msgs));
+const evil = await openWs({ cookie, origin: 'https://evil.example' });
+check('realtime: cross-origin socket is refused', evil.ok === false);
+const anon = await openWs({ origin: BASE });
+check('realtime: unauthenticated socket is refused', anon.ok === false);
+
+await call('POST', '/api/alerts/rules', { name: 'Live test', type: 'keyword', query: 'liveprobe', severity: 'critical', params: {} });
+await call('POST', '/api/articles', { outlet_name: 'Probe Daily', kind: 'online', title: 'Liveprobe headline appears right now', url: 'https://probe.my/' + Date.now() });
+await call('POST', '/api/alerts/evaluate');
+await wait(500);
+check('realtime: alert pushed to the browser without polling', live.msgs.some((m) => m.type === 'alert.created' && m.severity === 'critical'), JSON.stringify(live.msgs.map((m) => m.type)));
+live.w.close();
+
+// API keys
+r = await call('POST', '/api/workspace/api-keys', { name: 'BI export', role: 'viewer' });
+check('API key created and shown once', r.status === 201 && r.data.key.startsWith('veer_'), JSON.stringify(r.data));
+const key = r.data.key; const keyId = r.data.id;
+const asKey = (m, p, b) => fetch(BASE + p, { method: m, headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' }, body: b ? JSON.stringify(b) : undefined });
+let k = await asKey('GET', '/api/articles?q=seri');
+check('API key reads with Bearer auth (no cookie)', k.status === 200 && k.headers.get('ratelimit-limit') === '300');
+k = await asKey('POST', '/api/campaigns', { name: 'x' });
+check('viewer key cannot write', k.status === 403);
+k = await asKey('GET', '/api/contacts');
+check('viewer key cannot read contacts', k.status === 403);
+k = await asKey('GET', '/api/workspace/api-keys');
+check('API key cannot manage keys', k.status === 403);
+r = await call('GET', '/api/workspace/members');
+check('service users hidden from member list', !r.data.members.some((m) => m.email.endsWith('@api.invalid')));
+r = await call('DELETE', `/api/workspace/api-keys/${keyId}`);
+k = await asKey('GET', '/api/articles?q=seri');
+check('revoked key stops working immediately', r.status === 200 && k.status === 401);
+r = await call('POST', '/api/workspace/api-keys', { name: 'bad', role: 'owner' });
+check('keys can never be owner', r.status === 400);
+
+// AI governance
+r = await call('GET', '/api/ai/status');
+check('AI status reports disabled by default', r.status === 200 && r.data.enabled === false, JSON.stringify(r.data));
+r = await call('POST', '/api/ai/run');
+check('AI run refused while disabled', r.status === 409, JSON.stringify(r.data));
+r = await call('POST', '/api/ai/draft-summary', { date_from: '2020-01-01', date_to: '2030-01-01' });
+check('AI summary refused while disabled', r.status === 409);
+r = await call('PATCH', '/api/workspace/settings', { ai_enabled: true, ai_daily_limit: 300, retention_days: 90 });
+check('owner enables AI + retention', r.status === 200);
+const st = (await call('GET', '/api/ai/status')).data;
+r = await call('POST', '/api/ai/run');
+if (st.binding_available) {
+  check('AI run degrades gracefully (200 with real models, 502 if the model is unreachable; never 500)', [200, 502, 409].includes(r.status), `${r.status} ${JSON.stringify(r.data)}`);
+} else {
+  check('AI run returns 503 when the AI binding is absent (local config)', r.status === 503, `${r.status} ${JSON.stringify(r.data)}`);
+  console.log('NOTE  Workers AI binding not present in this run: model calls were NOT exercised end-to-end.');
+}
+r = await call('GET', '/api/audit?limit=200');
+const acts = new Set(r.data.entries.map((e) => e.action));
+check('audit covers API keys, settings and AI', ['api_key.created', 'api_key.revoked', 'workspace.settings_changed'].every((a) => acts.has(a)), [...acts].join(','));
+r = await call('GET', '/api/audit/export.csv', null, { raw: true });
+check('audit CSV export (manager+)', r.status === 200 && (await r.text()).includes('api_key.created'));
+r = await call('GET', '/api/health', null, { raw: true });
+check('request id header present', !!r.headers.get('x-request-id'));
+
+// rate limit: hammer an AI endpoint (limit 20/min per user)
+let limited = 0;
+for (let i = 0; i < 25; i++) { const x = await call('GET', '/api/ai/status', null, { raw: true }); if (x.status === 429) limited++; }
+check('rate limiting returns 429 with retry-after', limited > 0);
+
 cookie = '';
 r = await call('GET', '/api/articles?q=x');
 check('unauthenticated API is rejected', r.status === 401);

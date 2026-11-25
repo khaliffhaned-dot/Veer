@@ -135,6 +135,9 @@ export interface StoryRow {
   published_at: string | null;
   origin: string;
   sentiment: string | null;
+  ai_sentiment: string | null;
+  ai_sentiment_conf: number | null;
+  ai_title_en: string | null;
   articles_n: number;
   outlets_n: number;
   first_ts: string;
@@ -158,7 +161,7 @@ export async function searchStories(
     const rows = await db
       .prepare(
         `SELECT a.id, a.group_id, a.title, a.snippet, a.url, a.outlet_name, a.kind, a.language, a.ts, a.published_at,
-                a.origin, a.sentiment, 1 AS articles_n, 1 AS outlets_n, a.ts AS first_ts, a.ts AS last_ts
+                a.origin, a.sentiment, a.ai_sentiment, a.ai_sentiment_conf, a.ai_title_en, 1 AS articles_n, 1 AS outlets_n, a.ts AS first_ts, a.ts AS last_ts
          FROM articles a WHERE ${b.where} ORDER BY a.ts DESC LIMIT ? OFFSET ?`,
       )
       .bind(...b.params, page.limit, page.offset)
@@ -169,7 +172,7 @@ export async function searchStories(
   const rows = await db
     .prepare(
       `SELECT r.id, r.group_id, r.title, r.snippet, r.url, r.outlet_name, r.kind, r.language, r.ts, r.published_at,
-              r.origin, r.sentiment, r.articles_n, r.first_ts, r.last_ts,
+              r.origin, r.sentiment, r.ai_sentiment, r.ai_sentiment_conf, r.ai_title_en, r.articles_n, r.first_ts, r.last_ts,
               (SELECT COUNT(DISTINCT x.outlet_name) FROM articles x
                  WHERE x.workspace_id = r.workspace_id AND x.group_id = r.group_id) AS outlets_n
        FROM (

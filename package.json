@@ -5,15 +5,17 @@
   "type": "module",
   "description": "Malaysian media intelligence and workflow platform on Cloudflare (Workers + D1).",
   "scripts": {
-    "dev": "npm run build:web && wrangler dev",
+    "dev": "npm run build:web && wrangler dev --config wrangler.local.jsonc",
     "dev:web": "vite",
     "build:web": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test test/*.test.ts",
-    "db:migrate:local": "wrangler d1 migrations apply veer --local",
+    "db:migrate:local": "node scripts/local-config.mjs && wrangler d1 migrations apply veer --local --config wrangler.local.jsonc",
     "db:migrate:remote": "wrangler d1 migrations apply veer --remote",
     "smoke": "node scripts/smoke.mjs",
-    "deploy": "npm run build:web && wrangler deploy"
+    "deploy": "npm run build:web && wrangler deploy",
+    "predev": "node scripts/local-config.mjs",
+    "dev:ai": "npm run build:web && wrangler dev"
   },
   "dependencies": {
     "fast-xml-parser": "^4.5.0",

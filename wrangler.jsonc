@@ -22,6 +22,16 @@
   ],
   // Feed capture + alert evaluation every 15 minutes.
   "triggers": { "crons": ["*/15 * * * *"] },
-  "vars": { "ALLOW_SIGNUP": "false" },
+  // Realtime: one Durable Object per workspace (SQLite-backed class; works on the free plan).
+  "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "WorkspaceHub" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["WorkspaceHub"] }],
+  // Workers AI. Model ids are overridable below; check the catalogue and your plan's availability.
+  "ai": { "binding": "AI" },
+  "vars": {
+    "ALLOW_SIGNUP": "false",
+    "AI_TEXT_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "AI_EMBED_MODEL": "@cf/baai/bge-m3",
+    "AI_MERGE_THRESHOLD": "0.82"
+  },
   "observability": { "enabled": true }
 }

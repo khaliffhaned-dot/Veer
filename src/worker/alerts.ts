@@ -2,6 +2,7 @@ import { DEFAULT_SPIKE, evaluateSpike, isoDaysAgo, isoMinutesAgo, type SpikePara
 import { parseQuery } from '../shared/text';
 import { audit, jparse, nowIso, SYSTEM, uid } from './db';
 import { isSafeFeedUrl } from './net';
+import type { Publish } from './realtime';
 
 export interface RuleRow {
   id: string;
@@ -31,7 +32,7 @@ export function spikeParams(raw: string): SpikeParams {
   };
 }
 
-export async function evaluateAlerts(db: D1Database, wsId: string, now = new Date()): Promise<number> {
+export async function evaluateAlerts(db: D1Database, wsId: string, now = new Date(), publish?: Publish): Promise<number> {
   const { results: rules } = await db
     .prepare('SELECT * FROM alert_rules WHERE workspace_id = ? AND enabled = 1')
     .bind(wsId)
@@ -42,8 +43,8 @@ export async function evaluateAlerts(db: D1Database, wsId: string, now = new Dat
     if (!parsed.match) continue;
     try {
       created += rule.type === 'spike'
-        ? await evalSpike(db, rule, parsed.match, now)
-        : await evalKeyword(db, rule, parsed.match, now);
+        ? await evalSpike(db, rule, parsed.match, now, publish)
+        : await evalKeyword(db, rule, parsed.match, now, publish);
     } catch (e) {
       await audit(db, wsId, SYSTEM, 'alerts.rule_error', 'alert_rule', rule.id, { error: String((e as Error).message) });
     }
@@ -52,7 +53,7 @@ export async function evaluateAlerts(db: D1Database, wsId: string, now = new Dat
   return created;
 }
 
-async function evalSpike(db: D1Database, rule: RuleRow, match: string, now: Date): Promise<number> {
+async function evalSpike(db: D1Database, rule: RuleRow, match: string, now: Date, publish?: Publish): Promise<number> {
   const p = spikeParams(rule.params);
   const winStart = isoMinutesAgo(p.window_minutes, now);
   const baseStart = isoDaysAgo(p.baseline_days, now);
@@ -82,12 +83,13 @@ async function evalSpike(db: D1Database, rule: RuleRow, match: string, now: Date
     dedupeKey: `spike:${rule.id}:${bucket}`,
     detail: { ...v, window_minutes: p.window_minutes, baseline_days: p.baseline_days, sample },
     now,
+    publish,
   }))
     ? 1
     : 0;
 }
 
-async function evalKeyword(db: D1Database, rule: RuleRow, match: string, now: Date): Promise<number> {
+async function evalKeyword(db: D1Database, rule: RuleRow, match: string, now: Date, publish?: Publish): Promise<number> {
   // Only look at articles captured since the last evaluation (first run: last hour), and ignore
   // old stories that merely arrived late, so a backfill does not fire a burst of stale alerts.
   const since = rule.last_evaluated_at ?? isoMinutesAgo(60, now);
@@ -107,6 +109,7 @@ async function evalKeyword(db: D1Database, rule: RuleRow, match: string, now: Da
       dedupeKey: `kw:${rule.id}:${r.group_id}`,
       detail: { article_id: r.id, group_id: r.group_id, outlet: r.outlet_name, url: r.url, language: r.language },
       now,
+      publish,
     });
     if (ok) n++;
   }
@@ -116,7 +119,7 @@ async function evalKeyword(db: D1Database, rule: RuleRow, match: string, now: Da
 async function createAlert(
   db: D1Database,
   rule: RuleRow,
-  a: { title: string; dedupeKey: string; detail: Record<string, unknown>; now: Date },
+  a: { title: string; dedupeKey: string; detail: Record<string, unknown>; now: Date; publish?: Publish },
 ): Promise<string | null> {
   // Spike cooldown: suppress if this rule alerted recently, whatever the bucket.
   if (rule.type === 'spike') {
@@ -143,6 +146,7 @@ async function createAlert(
   await audit(db, rule.workspace_id, SYSTEM, 'alert.triggered', 'alert', id, {
     rule: rule.name, severity: rule.severity, title: a.title,
   });
+  await a.publish?.(rule.workspace_id, { type: 'alert.created', id, severity: rule.severity, title: a.title });
   if (rule.notify_webhook) await sendWebhook(db, rule.workspace_id, id, rule, a.title, a.detail);
   return id;
 }

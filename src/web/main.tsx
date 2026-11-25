@@ -6,6 +6,7 @@ import { api, ApiError } from './api';
 import { Layout, Loading, MeContext, type Me } from './components';
 import { Alerts, Dashboard, Login, Search } from './pages/core';
 import { Contacts, Setup, Sources } from './pages/ops';
+import { AiReview } from './pages/ai';
 import { CampaignDetail, Campaigns, PublicReport, ReportDetail, Reports } from './pages/work';
 
 function App() {
@@ -29,6 +30,7 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="search" element={<Search />} />
             <Route path="alerts" element={<Alerts />} />
+            <Route path="ai" element={<AiReview />} />
             <Route path="campaigns" element={<Campaigns />} />
             <Route path="campaigns/:id" element={<CampaignDetail />} />
             <Route path="reports" element={<Reports />} />

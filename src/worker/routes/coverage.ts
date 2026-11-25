@@ -11,6 +11,8 @@ import { isSafeFeedUrl } from '../net';
 import { freshness } from '../../shared/stats';
 import { loadDemoData, removeDemoData } from '../seed';
 import type { Lang } from '../../shared/text';
+import { makePublish } from '../realtime';
+import { enrichHook } from '../hooks';
 
 export const coverage = new Hono<AppEnv>();
 coverage.use('*', requireAuth);
@@ -230,7 +232,8 @@ coverage.get('/capture/status', async (c) => {
 });
 
 coverage.post('/capture/run', requireRole('manager'), async (c) => {
-  const s = await runIngest(c.env.DB, { workspaceId: c.get('wsId'), trigger: 'manual' });
+  const publish = makePublish(c.env);
+  const s = await runIngest(c.env.DB, { workspaceId: c.get('wsId'), trigger: 'manual', hooks: { publish, enrich: enrichHook(c.env) } });
   await audit(c.env.DB, c.get('wsId'), actor(c), 'capture.run_manual', null, null, { ...s });
   return c.json(s);
 });

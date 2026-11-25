@@ -151,6 +151,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 const daysAgo = (n: number) => new Date(Date.now() - n * 86400_000).toISOString().slice(0, 10);
 
 export function Reports() {
+  const { me } = useMe();
   const canEdit = useCan('analyst');
   const nav = useNavigate();
   const list = useLoad(() => api('GET', '/reports'), []);
@@ -158,6 +159,7 @@ export function Reports() {
   const ents = useLoad(() => api('GET', '/entities'), []);
   const [f, setF] = useState({ title: '', campaign_id: '', query: '', date_from: daysAgo(7), date_to: today(), entity_ids: [] as string[], summary: '' });
   const [err, setErr] = useState<string | null>(null);
+  const [drafting, setDrafting] = useState(false);
   return (
     <>
       <h1>Reports</h1>
@@ -183,6 +185,7 @@ export function Reports() {
             </div>
             <div><label>Compare share of voice (brands, competitors, topics)</label><div className="chips">{ents.data?.entities.map((x: any) => <button type="button" key={x.id} className="chip" aria-pressed={f.entity_ids.includes(x.id)} onClick={() => setF({ ...f, entity_ids: f.entity_ids.includes(x.id) ? f.entity_ids.filter((i) => i !== x.id) : [...f.entity_ids, x.id] })}>{x.name}</button>)}</div></div>
             <Field id="rs" label="Written summary (shown to approvers and the client)"><textarea id="rs" value={f.summary} onChange={(e) => setF({ ...f, summary: e.target.value })} /></Field>
+            {me.workspace.ai_enabled && canEdit && <div className="row"><button type="button" disabled={drafting} onClick={async () => { setDrafting(true); try { const r = await api('POST', '/ai/draft-summary', { campaign_id: f.campaign_id || null, query: f.query || undefined, date_from: f.date_from, date_to: f.date_to }); setF({ ...f, summary: r.text }); setErr(null); } catch (x) { setErr((x as Error).message); } finally { setDrafting(false); } }}>{drafting ? 'Drafting…' : 'Draft with AI'}</button><span className="small muted"><Badge tone="ai">AI</Badge> Drafts from the measured figures only. You must review it before sending.</span></div>}
             <button className="primary">Create report</button>
           </form>
         </Card>

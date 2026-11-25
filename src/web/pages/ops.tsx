@@ -222,7 +222,11 @@ export function Setup() {
   const [e, setE] = useState({ name: '', type: 'brand', aliases: '', excludes: '' });
   const [m, setM] = useState({ email: '', name: '', role: 'analyst', password: '' });
   const [hook, setHook] = useState({ url: '', secret: '' });
-  const act = async (fn: () => Promise<any>) => { try { await fn(); setErr(null); ents.reload(); members.reload(); audit.reload(); reload(); } catch (x) { setErr((x as Error).message); } };
+  const keys = useLoad(() => (isOwner ? api('GET', '/workspace/api-keys') : Promise.resolve({ keys: [] })), [isOwner]);
+  const [lim, setLim] = useState(String(me.workspace.ai_daily_limit));
+  const [kf, setKf] = useState({ name: '', role: 'viewer' });
+  const [newKey, setNewKey] = useState<string | null>(null);
+  const act = async (fn: () => Promise<any>) => { try { await fn(); setErr(null); ents.reload(); members.reload(); audit.reload(); keys.reload(); reload(); } catch (x) { setErr((x as Error).message); } };
   const list = (s: string) => s.split(/[,\n]/).map((x) => x.trim()).filter(Boolean);
 
   return (
@@ -278,14 +282,38 @@ export function Setup() {
             </div>
             <button>Save webhook</button>
           </form>
+          <h3>AI (Workers AI)</h3>
+          <p className="small muted">When on, headlines and short excerpts of captured articles are sent to Cloudflare Workers AI to suggest sentiment, translate headlines, and find duplicate stories. Article bodies are never stored or sent. Confirm Cloudflare's current data-handling terms and your clients' contracts before enabling. Output is labelled AI and needs human acceptance.</p>
+          <label><input type="checkbox" checked={me.workspace.ai_enabled} onChange={(x) => act(() => api('PATCH', '/workspace/settings', { ai_enabled: x.target.checked }))} /> Enable AI features for this workspace</label>
+          <form className="row" style={{ marginTop: 8 }} onSubmit={(ev) => { ev.preventDefault(); act(() => api('PATCH', '/workspace/settings', { ai_daily_limit: +lim })); }}>
+            <Field id="lim" label={`Daily AI budget in units (currently ${me.workspace.ai_daily_limit}; about 3 units per article)`}><input id="lim" type="number" min={0} value={lim} onChange={(x) => setLim(x.target.value)} /></Field><button style={{ alignSelf: 'end' }}>Save budget</button>
+          </form>
+          <h3>Data retention</h3>
+          <p className="small muted">Deletes captured articles older than the chosen age (nightly cron). Frozen report snapshots are kept. Currently: {me.workspace.retention_days ? `${me.workspace.retention_days} days` : 'keep forever'}.</p>
+          <div className="row"><select aria-label="Retention" style={{ width: 'auto' }} value={me.workspace.retention_days ?? ''} onChange={(x) => act(() => api('PATCH', '/workspace/settings', { retention_days: x.target.value ? +x.target.value : null }))}><option value="">Keep forever</option><option value="90">90 days</option><option value="365">1 year</option><option value="730">2 years</option><option value="1825">5 years</option></select></div>
           <h3>Sample data</h3>
           <p className="small muted">Loads clearly labelled synthetic coverage from fictional outlets, for trying the product out. It is flagged in search and in any report that includes it.</p>
           <div className="row"><button onClick={() => act(() => api('POST', '/demo/load'))}>Load sample data</button><button className="danger" onClick={() => act(() => api('DELETE', '/demo'))}>Remove sample data</button></div>
         </Card>
       )}
 
+      {isOwner && (
+        <Card title="API keys">
+          <p className="small muted">For integrations and BI tools: send <code>Authorization: Bearer &lt;key&gt;</code> to the same <code>/api</code> endpoints. A key acts with the role you choose (never owner), is rate-limited to 300 requests/minute, and appears by name in the audit trail.</p>
+          {newKey && <div className="notice" role="status">Copy this key now; it will not be shown again:<br /><code>{newKey}</code></div>}
+          <div className="tablewrap"><table><thead><tr><th>Name</th><th>Key</th><th>Role</th><th>Last used</th><th /></tr></thead><tbody>
+            {keys.data?.keys.map((k: any) => <tr key={k.id}><td>{k.name}</td><td><code>{k.prefix}…</code></td><td>{k.role ?? '—'}</td><td className="small">{k.revoked_at ? <Badge tone="bad">revoked</Badge> : fmtDate(k.last_used_at)}</td><td>{!k.revoked_at && <button className="danger" onClick={() => window.confirm(`Revoke ${k.name}?`) && act(() => api('DELETE', `/workspace/api-keys/${k.id}`))}>Revoke</button>}</td></tr>)}
+          </tbody></table></div>
+          <form className="row" onSubmit={(ev) => { ev.preventDefault(); act(async () => { const r = await api('POST', '/workspace/api-keys', kf); setNewKey(r.key); setKf({ name: '', role: 'viewer' }); }); }}>
+            <Field id="kn" label="Key name"><input id="kn" required value={kf.name} onChange={(x) => setKf({ ...kf, name: x.target.value })} /></Field>
+            <Field id="kr" label="Role"><select id="kr" value={kf.role} onChange={(x) => setKf({ ...kf, role: x.target.value })}>{['viewer', 'analyst', 'manager'].map((r) => <option key={r}>{r}</option>)}</select></Field>
+            <button style={{ alignSelf: 'end' }}>Create key</button>
+          </form>
+        </Card>
+      )}
+
       {isMgr && (
-        <Card title="Audit trail (latest 100)">
+        <Card title="Audit trail (latest 100)" actions={<a className="btn" href="/api/audit/export.csv">Export full log (CSV)</a>}>
           <div className="tablewrap"><table><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Detail</th></tr></thead><tbody>
             {audit.data?.entries.map((x: any) => <tr key={x.id}><td className="small">{fmtDate(x.at)}</td><td>{x.actor}</td><td><code>{x.action}</code></td><td className="small muted">{Object.keys(x.detail).length ? JSON.stringify(x.detail).slice(0, 200) : ''}</td></tr>)}
           </tbody></table></div>

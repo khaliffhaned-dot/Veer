@@ -12,6 +12,7 @@ import {
 import { audit, jparse, nowIso, SYSTEM, uid } from './db';
 import { evaluateAlerts } from './alerts';
 import { isSafeFeedUrl } from './net';
+import type { Publish } from './realtime';
 
 export type OutletKind = 'online' | 'print' | 'broadcast' | 'blog' | 'social' | 'wire';
 export type Origin = 'feed' | 'manual' | 'import' | 'demo';
@@ -199,7 +200,10 @@ export interface RunSummary {
 
 export async function runIngest(
   db: D1Database,
-  opts: { workspaceId?: string; trigger: 'cron' | 'manual'; maxFeeds?: number; fetcher?: typeof fetchFeed } = {
+  opts: {
+    workspaceId?: string; trigger: 'cron' | 'manual'; maxFeeds?: number; fetcher?: typeof fetchFeed;
+    hooks?: { publish?: Publish; enrich?: (wsId: string) => Promise<unknown> };
+  } = {
     trigger: 'cron',
   },
 ): Promise<RunSummary> {
@@ -226,7 +230,8 @@ export async function runIngest(
       .all<OutletRow>();
     if (!outlets.length) {
       // Nothing to fetch, but manual/imported coverage can still trip alert rules.
-      await evaluateAlerts(db, ws.id).catch(() => undefined);
+      await evaluateAlerts(db, ws.id, new Date(), opts.hooks?.publish).catch(() => undefined);
+      await opts.hooks?.enrich?.(ws.id).catch(() => undefined);
       continue;
     }
 
@@ -301,10 +306,13 @@ export async function runIngest(
     total.itemsSeen += run.seen;
     total.itemsNew += run.fresh;
 
+    if (run.fresh > 0) await opts.hooks?.publish?.(ws.id, { type: 'articles.new', count: run.fresh });
+    await opts.hooks?.publish?.(ws.id, { type: 'capture.done' });
     try {
-      await evaluateAlerts(db, ws.id);
+      await evaluateAlerts(db, ws.id, new Date(), opts.hooks?.publish);
+      await opts.hooks?.enrich?.(ws.id);
     } catch (e) {
-      await audit(db, ws.id, SYSTEM, 'alerts.evaluation_failed', null, null, { error: String((e as Error).message) });
+      await audit(db, ws.id, SYSTEM, 'alerts.or_ai_failed', null, null, { error: String((e as Error).message) });
     }
   }
   return total;

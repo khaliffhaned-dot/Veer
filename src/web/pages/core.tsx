@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, fmtDate, qs, LANG_LABEL, KIND_LABEL } from '../api';
-import { Badge, Card, Empty, ErrorBox, Field, KindBadge, LangBadge, Loading, SeverityBadge, Stat, useCan, useLoad } from '../components';
+import { Badge, Card, Empty, ErrorBox, Field, KindBadge, LangBadge, Loading, SeverityBadge, Stat, useCan, useEvent, useLoad } from '../components';
 
 // ───────────── Sign in / first-run ─────────────
 export function Login({ onDone }: { onDone: () => void }) {
@@ -40,8 +40,9 @@ export function Login({ onDone }: { onDone: () => void }) {
 
 // ───────────── Dashboard ─────────────
 export function Dashboard() {
-  const { data, error, loading } = useLoad(() => api('GET', '/dashboard'), []);
+  const { data, error, loading, reload } = useLoad(() => api('GET', '/dashboard'), []);
   const alerts = useLoad(() => api('GET', '/alerts?status=open&limit=5'), []);
+  useEvent(['alert.created', 'alert.updated', 'articles.new', 'capture.done'], () => { reload(); alerts.reload(); });
   if (loading) return <Loading />;
   if (error) return <ErrorBox message={error} />;
   const d = data;
@@ -163,6 +164,11 @@ export function Search() {
               <span className="muted">{fmtDate(r.ts)}{!r.published_at && ' (capture time; no publish date)'}</span>
             </div>
             {r.snippet && <div className="small muted">{r.snippet}</div>}
+            {r.ai_title_en && <div className="small muted"><Badge tone="ai">AI translation</Badge> {r.ai_title_en}</div>}
+            {r.ai_sentiment && !r.sentiment && (
+              <div className="row small"><Badge tone="ai">AI suggests: {r.ai_sentiment}{r.ai_sentiment_conf != null && ` (self-rated ${Math.round(r.ai_sentiment_conf * 100)}%)`}</Badge>
+                {canWrite && <button className="link" onClick={async () => { try { await api('POST', `/ai/articles/${r.id}/accept-sentiment`); res.reload(); } catch (e) { setMsg((e as Error).message); } }}>Accept as my tag</button>}</div>
+            )}
             {canWrite && (
               <div className="row small" style={{ marginTop: 4 }}>
                 <label className="small" style={{ margin: 0 }}>Sentiment (analyst)</label>
@@ -198,6 +204,7 @@ export function Alerts() {
   const [err, setErr] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', type: 'spike', query: '', severity: 'high', window_minutes: 60, multiplier: 3, min_stories: 5, notify_webhook: false });
   const [testRes, setTestRes] = useState<any>(null);
+  useEvent(['alert.created', 'alert.updated'], () => list.reload());
 
   const act = async (fn: () => Promise<unknown>) => { try { await fn(); setErr(null); list.reload(); rules.reload(); } catch (e) { setErr((e as Error).message); } };
   const params = () => form.type === 'spike' ? { window_minutes: +form.window_minutes, multiplier: +form.multiplier, min_stories: +form.min_stories } : {};

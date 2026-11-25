@@ -9,6 +9,8 @@ import { evaluateAlerts, spikeParams } from '../alerts';
 import { parseQuery } from '../../shared/text';
 import { evaluateSpike } from '../../shared/stats';
 import { isoDaysAgo, isoMinutesAgo } from '../../shared/stats';
+import { makePublish } from '../realtime';
+import { csvResponse, toCsv } from '../util';
 
 export const alerts = new Hono<AppEnv>();
 alerts.use('*', requireAuth);
@@ -97,7 +99,7 @@ alerts.post('/rules/test', requireRole('manager'), async (c) => {
 });
 
 alerts.post('/evaluate', requireRole('manager'), async (c) => {
-  const n = await evaluateAlerts(c.env.DB, c.get('wsId'));
+  const n = await evaluateAlerts(c.env.DB, c.get('wsId'), new Date(), makePublish(c.env));
   return c.json({ created: n });
 });
 
@@ -119,6 +121,7 @@ alerts.post('/:id/ack', requireRole('analyst'), async (c) => {
     .bind(c.get('user').id, nowIso(), c.req.param('id'), c.get('wsId')).run();
   if (!r.meta.changes) throw new HTTPException(409, { message: 'Alert not found or already handled' });
   await audit(c.env.DB, c.get('wsId'), actor(c), 'alert.acknowledged', 'alert', c.req.param('id'));
+  await makePublish(c.env)(c.get('wsId'), { type: 'alert.updated', id: c.req.param('id'), status: 'acknowledged' });
   return c.json({ ok: true });
 });
 
@@ -128,12 +131,18 @@ alerts.post('/:id/resolve', requireRole('analyst'), async (c) => {
     .bind(c.get('user').id, nowIso(), b.note, c.req.param('id'), c.get('wsId')).run();
   if (!r.meta.changes) throw new HTTPException(409, { message: 'Alert not found or already resolved' });
   await audit(c.env.DB, c.get('wsId'), actor(c), 'alert.resolved', 'alert', c.req.param('id'), { note: b.note });
+  await makePublish(c.env)(c.get('wsId'), { type: 'alert.updated', id: c.req.param('id'), status: 'resolved' });
   return c.json({ ok: true });
 });
 
 // ───────────── Audit trail ─────────────
 export const auditRoutes = new Hono<AppEnv>();
 auditRoutes.use('*', requireAuth, requireRole('manager'));
+auditRoutes.get('/export.csv', async (c) => {
+  const { results } = await c.env.DB.prepare('SELECT at, actor, action, entity_type, entity_id, detail FROM audit_log WHERE workspace_id = ? ORDER BY at DESC, rowid DESC LIMIT 20000').bind(c.get('wsId')).all<Record<string, unknown>>();
+  await audit(c.env.DB, c.get('wsId'), actor(c), 'audit.exported', null, null, { rows: results.length });
+  return csvResponse(c, 'audit-log.csv', toCsv(['at_utc', 'actor', 'action', 'entity_type', 'entity_id', 'detail'], results.map((r) => [r.at, r.actor, r.action, r.entity_type, r.entity_id, r.detail])));
+});
 auditRoutes.get('/', async (c) => {
   const { limit, offset } = paging(c, 100, 500);
   const where = ['workspace_id = ?'];

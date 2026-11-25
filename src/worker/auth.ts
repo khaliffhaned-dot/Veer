@@ -80,31 +80,57 @@ export const csrfGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   await next();
 };
 
-/** Resolves session → user → workspace membership. Sets c.var.user / wsId / role. */
+export async function rateLimit(c: Context<AppEnv>, key: string, max: number, windowMs = 60_000): Promise<void> {
+  const w = Math.floor(Date.now() / windowMs);
+  const r = await c.env.DB.prepare('INSERT INTO rate_limits (key, window, n) VALUES (?,?,1) ON CONFLICT(key, window) DO UPDATE SET n = n + 1 RETURNING n')
+    .bind(key, w).first<{ n: number }>();
+  const n = r?.n ?? 1;
+  c.header('ratelimit-limit', String(max));
+  c.header('ratelimit-remaining', String(Math.max(0, max - n)));
+  if (n > max) {
+    c.header('retry-after', String(Math.ceil(((w + 1) * windowMs - Date.now()) / 1000)));
+    throw new HTTPException(429, { message: 'Rate limit exceeded. Slow down and retry shortly.' });
+  }
+}
+
+/** Resolves a Bearer API key or a session cookie to user + workspace + role, then rate-limits the principal. */
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const token = getCookie(c, COOKIE);
-  if (!token) throw new HTTPException(401, { message: 'Not signed in' });
-  const row = await c.env.DB.prepare(
-    `SELECT u.id, u.email, u.name FROM sessions s JOIN users u ON u.id = s.user_id
-     WHERE s.token_hash = ? AND s.expires_at > ?`,
-  )
-    .bind(await sha256Hex(token), nowIso())
-    .first<{ id: string; email: string; name: string }>();
-  if (!row) throw new HTTPException(401, { message: 'Session expired' });
-
-  const wanted = c.req.header('x-workspace-id');
-  const m = wanted
-    ? await c.env.DB.prepare('SELECT workspace_id, role FROM memberships WHERE user_id = ? AND workspace_id = ?')
-        .bind(row.id, wanted)
-        .first<{ workspace_id: string; role: Role }>()
-    : await c.env.DB.prepare('SELECT workspace_id, role FROM memberships WHERE user_id = ? ORDER BY created_at LIMIT 1')
-        .bind(row.id)
-        .first<{ workspace_id: string; role: Role }>();
-  if (!m) throw new HTTPException(403, { message: 'No access to this workspace' });
-
-  c.set('user', row);
-  c.set('wsId', m.workspace_id);
-  c.set('role', m.role);
+  const bearer = c.req.header('authorization');
+  let principal: string;
+  let limit = 600;
+  if (bearer?.toLowerCase().startsWith('bearer ')) {
+    const k = await c.env.DB.prepare(
+      `SELECT k.id, k.workspace_id, k.last_used_at, u.id AS uid, u.email, u.name, m.role FROM api_keys k
+       JOIN users u ON u.id = k.user_id JOIN memberships m ON m.user_id = u.id AND m.workspace_id = k.workspace_id
+       WHERE k.key_hash = ? AND k.revoked_at IS NULL`,
+    ).bind(await sha256Hex(bearer.slice(7).trim())).first<{ id: string; workspace_id: string; last_used_at: string | null; uid: string; email: string; name: string; role: Role }>();
+    if (!k) throw new HTTPException(401, { message: 'Invalid or revoked API key' });
+    c.set('user', { id: k.uid, email: k.email, name: k.name });
+    c.set('wsId', k.workspace_id);
+    c.set('role', k.role);
+    principal = `key:${k.id}`;
+    limit = 300;
+    if (!k.last_used_at || Date.parse(k.last_used_at) < Date.now() - 300_000) {
+      await c.env.DB.prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?').bind(nowIso(), k.id).run();
+    }
+  } else {
+    const token = getCookie(c, COOKIE);
+    if (!token) throw new HTTPException(401, { message: 'Not signed in' });
+    const row = await c.env.DB.prepare(
+      `SELECT u.id, u.email, u.name FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?`,
+    ).bind(await sha256Hex(token), nowIso()).first<{ id: string; email: string; name: string }>();
+    if (!row) throw new HTTPException(401, { message: 'Session expired' });
+    const wanted = c.req.header('x-workspace-id');
+    const m = wanted
+      ? await c.env.DB.prepare('SELECT workspace_id, role FROM memberships WHERE user_id = ? AND workspace_id = ?').bind(row.id, wanted).first<{ workspace_id: string; role: Role }>()
+      : await c.env.DB.prepare('SELECT workspace_id, role FROM memberships WHERE user_id = ? ORDER BY created_at LIMIT 1').bind(row.id).first<{ workspace_id: string; role: Role }>();
+    if (!m) throw new HTTPException(403, { message: 'No access to this workspace' });
+    c.set('user', row);
+    c.set('wsId', m.workspace_id);
+    c.set('role', m.role);
+    principal = `user:${row.id}`;
+  }
+  await rateLimit(c, principal, limit);
   await next();
 };
 

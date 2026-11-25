@@ -82,4 +82,9 @@ th { font-size: 0.8rem; color: var(--muted); font-weight: 600; }
 .chip[aria-pressed=true] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 .skip { position: absolute; left: -999px; } .skip:focus { left: var(--s2); top: var(--s2); background: var(--surface); padding: var(--s2); z-index: 9; }
 .report { max-width: 900px; margin: 0 auto; }
+/* AI output is dashed + labelled so it is never mistaken for a measurement or a human judgement. */
+.badge.ai { border-style: dashed; color: var(--tagged); }
+.toasts { position: fixed; top: var(--s4); right: var(--s4); z-index: 20; display: flex; flex-direction: column; gap: var(--s2); max-width: 340px; }
+.toast { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--sev-high); border-radius: var(--radius); padding: var(--s3); box-shadow: 0 4px 16px rgba(0,0,0,.2); }
+.toast.critical { border-left-color: var(--sev-critical); } .toast.medium { border-left-color: var(--sev-medium); } .toast.low { border-left-color: var(--sev-low); }
 @media print { .sidebar, .noprint { display: none !important; } .layout { display: block; } body { background: #fff; color: #000; } .card { break-inside: avoid; } }

@@ -3,6 +3,13 @@ export interface Env {
   ASSETS: Fetcher;
   /** Optional: set to "true" in wrangler vars to allow open sign-up of new workspaces. */
   ALLOW_SIGNUP?: string;
+  /** Realtime fan-out: one Durable Object per workspace. */
+  HUB: DurableObjectNamespace;
+  /** Workers AI. Optional so the app still runs where the binding is unavailable. */
+  AI?: import('./ai').AiBinding;
+  AI_TEXT_MODEL?: string;
+  AI_EMBED_MODEL?: string;
+  AI_MERGE_THRESHOLD?: string;
 }
 
 export type Role = 'viewer' | 'analyst' | 'manager' | 'owner';
